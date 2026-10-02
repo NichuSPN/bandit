@@ -24,7 +24,11 @@
 
 ### Prerequisites
 - **Go**: Version `1.24+` ([golang.org](https://go.dev/dl/))
-- **Rust**: Rust toolchain ([rustup.rs](https://rustup.rs/))
+- **Rust (`cargo`)**: Install Rust via [rustup.rs](https://rustup.rs/):
+  ```bash
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+  source $HOME/.cargo/env
+  ```
 - **GCC / MinGW**: Required for CGO compilation on Linux/Windows ([mingw-w64](https://www.mingw-w64.org/))
 
 ---

@@ -9,6 +9,31 @@ echo "======================================================="
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$SCRIPT_DIR"
 
+# Auto-load Rust environment if cargo is not in PATH
+if ! command -v cargo &> /dev/null; then
+    if [ -f "$HOME/.cargo/env" ]; then
+        source "$HOME/.cargo/env"
+    elif [ -x "$HOME/.cargo/bin/cargo" ]; then
+        export PATH="$HOME/.cargo/bin:$PATH"
+    fi
+fi
+
+if ! command -v cargo &> /dev/null; then
+    echo "❌ Error: 'cargo' command not found."
+    echo "Rust is required to build Bandit's core engine."
+    echo "Please install Rust by running:"
+    echo "   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
+    echo "Then restart your terminal or run: source \$HOME/.cargo/env"
+    exit 1
+fi
+
+if ! command -v go &> /dev/null; then
+    echo "❌ Error: 'go' command not found."
+    echo "Go 1.24+ is required to build Bandit."
+    echo "Please download Go from https://go.dev/dl/"
+    exit 1
+fi
+
 echo ""
 echo "[1/2] Compiling Rust core engine static library (bandit_engine)..."
 cd bandit_engine
