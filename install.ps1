@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Stop'
 $version = "1.0.0"
-$repo = "YOUR_USERNAME/bandit"
+$repo = "NichuSPN/bandit"
 $url = "https://github.com/$repo/releases/download/v$version/bandit-v$version-windows-amd64.zip"
 $installDir = "$env:LOCALAPPDATA\bandit"
 
