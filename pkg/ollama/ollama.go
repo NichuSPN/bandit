@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -51,7 +52,16 @@ func NewOllamaClient(cfg config.ModelConfig) *OllamaClient {
 	return &OllamaClient{
 		config: cfg,
 		httpClient: &http.Client{
-			Timeout: 120 * time.Second,
+			Timeout: 0, // Disable overall request deadline so long LLM streams aren't cut off
+			Transport: &http.Transport{
+				DialContext: (&net.Dialer{
+					Timeout:   30 * time.Second,
+					KeepAlive: 30 * time.Second,
+				}).DialContext,
+				TLSHandshakeTimeout:   10 * time.Second,
+				ResponseHeaderTimeout: 60 * time.Second,
+				IdleConnTimeout:       90 * time.Second,
+			},
 		},
 	}
 }
