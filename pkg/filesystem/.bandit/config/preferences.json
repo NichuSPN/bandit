@@ -1,0 +1,13 @@
+{
+  "ignored_paths": [
+    ".git",
+    "node_modules",
+    "target",
+    "dist",
+    "build",
+    "venv",
+    "backup_go"
+  ],
+  "include_hidden_files": true,
+  "respect_gitignore": true
+}

@@ -1,0 +1,21 @@
+# Executables & Binaries
+bandit
+bandit.exe
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Rust target build directory
+target/
+bandit_engine/target/
+
+# Backup & temporary folders
+backup_go/
+.DS_Store
+
+# IDE & Editor settings
+.idea/
+.vscode/
+*.swp
+*.swo

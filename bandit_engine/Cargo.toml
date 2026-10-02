@@ -1,0 +1,13 @@
+[package]
+name = "bandit_engine"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "bandit_engine"
+crate-type = ["staticlib"]
+
+[dependencies]
+ignore = "0.4"
+rayon = "1.10"
+similar = "2.6"

@@ -1,0 +1,21 @@
+{
+  "version": "1.0.0",
+  "description": "Autonomous local terminal AI agent powered by Go and Rust",
+  "homepage": "https://github.com/YOUR_USERNAME/bandit",
+  "license": "MIT",
+  "architecture": {
+    "64bit": {
+      "url": "https://github.com/YOUR_USERNAME/bandit/releases/download/v1.0.0/bandit-v1.0.0-windows-amd64.zip",
+      "hash": "REPLACE_WITH_WINDOWS_AMD64_SHA256",
+      "bin": "bandit.exe"
+    }
+  },
+  "checkver": "github",
+  "autoupdate": {
+    "architecture": {
+      "64bit": {
+        "url": "https://github.com/YOUR_USERNAME/bandit/releases/download/v$version/bandit-v$version-windows-amd64.zip"
+      }
+    }
+  }
+}
