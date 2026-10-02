@@ -20,39 +20,36 @@
 
 ---
 
-## 🚀 Installation & Usage
+## 🚀 Quick Start & Installation (Build from Source)
 
-### 🍏 macOS Installation (Homebrew & Pre-compiled Binaries)
-
-#### Option 1: Homebrew (Recommended for macOS)
-```bash
-brew tap NichuSPN/bandit
-brew install bandit
-```
-
-#### Option 2: Build from Source on macOS
-Prerequisites: Go `1.24+` and Rust (`cargo`).
-
-```bash
-git clone https://github.com/NichuSPN/bandit.git
-cd bandit
-./build.sh
-```
-This compiles `./bandit` and installs it to `~/.cargo/bin/bandit`.
+### Prerequisites
+- **Go**: Version `1.24+` ([golang.org](https://go.dev/dl/))
+- **Rust**: Rust toolchain ([rustup.rs](https://rustup.rs/))
+- **GCC / MinGW**: Required for CGO compilation on Linux/Windows ([mingw-w64](https://www.mingw-w64.org/))
 
 ---
 
-### 🪟 Windows & Other OS (Run from Local Repository)
+### 🍏 macOS & Linux Installation
 
-For Windows and other operating systems, clone the repository and run locally from source:
+```bash
+# 1. Clone the repository
+git clone https://github.com/NichuSPN/bandit.git
+cd bandit
 
-#### Prerequisites
-- **Go**: Version `1.24+` ([golang.org](https://go.dev/dl/))
-- **Rust**: Rust toolchain ([rustup.rs](https://rustup.rs/))
-- **MinGW GCC**: GCC compiler for Windows CGO ([mingw-w64](https://www.mingw-w64.org/))
+# 2. Build single executable & install globally
+./build.sh
 
-#### Running Locally on Windows
-Open PowerShell or Command Prompt:
+# 3. Launch Bandit anywhere!
+bandit
+```
+
+`./build.sh` statically compiles the CGO Rust engine library, builds the `./bandit` executable, and automatically installs it to `~/.cargo/bin/bandit`.
+
+---
+
+### 🪟 Windows Installation
+
+Open PowerShell:
 
 ```powershell
 # 1. Clone the repository
@@ -69,12 +66,12 @@ cd bandit
 Or run directly with Go:
 
 ```powershell
-# Compile Rust engine static library
+# Step 1: Compile Rust engine static library
 cd bandit_engine
 cargo build --release
 cd ..
 
-# Run Go CLI
+# Step 2: Run Go CLI directly
 go run main.go
 ```
 
@@ -107,18 +104,26 @@ bandit
 
 ---
 
-## 📦 How to Publish a New Release (For Maintainers)
+## 🛠 Project Architecture
 
-Releases are automated via GitHub Actions (`.github/workflows/release.yml`).
-
-To publish a new version:
-
-```bash
-git tag v1.0.0
-git push origin v1.0.0
 ```
-
-GitHub Actions will automatically build binaries for macOS (ARM64 & Intel) and Linux and publish them to GitHub Releases.
+bandit/
+├── main.go               # Entry point
+├── build.sh              # 2-Step Hybrid Build script (Go + Rust)
+├── build.ps1             # Windows PowerShell build script
+├── bandit_engine/        # Core Rust engine (CGO static library)
+│   ├── Cargo.toml
+│   └── src/lib.rs
+├── pkg/                  # Go core packages
+│   ├── agent/            # Agent state, tool loops, context rollback
+│   ├── claude/           # Claude Code CLI integration
+│   ├── cli/              # Native CLI prompt loop & signal handlers
+│   ├── config/           # Project & global configuration settings
+│   ├── filesystem/       # Clean file operations & formatting
+│   ├── git/              # Workspace git state inspection
+│   └── ollama/           # Local LLM API streaming client
+└── spec.md               # Technical specification
+```
 
 ---
 
