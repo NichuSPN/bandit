@@ -26,6 +26,15 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Setup MinGW GCC (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: egor-tisin/setup-mingw@v2
+
+      - name: Build Rust Engine
+        run: |
+          cd bandit_engine
+          cargo build --release
+
       - name: Rust Engine Tests
         run: |
           cd bandit_engine

@@ -1,7 +1,8 @@
 package engine
 
 /*
-#cgo LDFLAGS: -L${SRCDIR}/../../bandit_engine/target/release -lbandit_engine -ldl -lm
+#cgo !windows LDFLAGS: -L${SRCDIR}/../../bandit_engine/target/release -lbandit_engine -ldl -lm
+#cgo windows LDFLAGS: -L${SRCDIR}/../../bandit_engine/target/release -lbandit_engine -lws2_32 -luserenv -lbcrypt -lntdll
 #include <stdlib.h>
 
 extern char* rust_fast_search(const char* query, const char* dir, const char* ignores);
