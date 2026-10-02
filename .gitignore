@@ -12,6 +12,7 @@ bandit_engine/target/
 
 # Backup & temporary folders
 backup_go/
+homebrew-bandit/
 .DS_Store
 
 # IDE & Editor settings
