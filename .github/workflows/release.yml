@@ -29,10 +29,6 @@ jobs:
             target: x86_64-apple-darwin
             artifact_name: bandit-v${{ github.ref_name }}-darwin-amd64.tar.gz
             binary_name: bandit
-          - os: windows-latest
-            target: x86_64-pc-windows-gnu
-            artifact_name: bandit-v${{ github.ref_name }}-windows-amd64.zip
-            binary_name: bandit.exe
 
     steps:
       - name: Checkout Repository
@@ -42,14 +38,6 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.24'
-
-      - name: Setup MSYS2 GCC (Windows)
-        if: matrix.os == 'windows-latest'
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: UCRT64
-          update: true
-          install: mingw-w64-ucrt-x86_64-gcc
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
@@ -63,19 +51,10 @@ jobs:
           mkdir -p target/release
           cp -r target/${{ matrix.target }}/release/* target/release/ || true
 
-      - name: Build Go Binary (Linux/macOS)
-        if: matrix.os != 'windows-latest'
+      - name: Build Go Binary
         run: |
           CGO_ENABLED=1 go build -o ${{ matrix.binary_name }} main.go
           tar -czvf ${{ matrix.artifact_name }} ${{ matrix.binary_name }} README.md LICENSE
-
-      - name: Build Go Binary (Windows)
-        if: matrix.os == 'windows-latest'
-        shell: powershell
-        run: |
-          $env:CGO_ENABLED="1"
-          go build -o ${{ matrix.binary_name }} main.go
-          Compress-Archive -Path ${{ matrix.binary_name }}, README.md, LICENSE -DestinationPath ${{ matrix.artifact_name }}
 
       - name: Upload Release Asset
         uses: softprops/action-gh-release@v2

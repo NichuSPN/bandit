@@ -12,7 +12,7 @@
 - **Strict Read-Only Chat Boundary**: Standard interactive chat is strictly read-only—allowing you to inspect codebase diffs, search files, and plan changes without modifying disk state.
 - **Controlled Disk Mutations (`/local` & `/claude`)**: Disk modifications occur strictly when explicitly triggered via `/local` or `/claude`.
 - **Local Model Escalation Synthesis**: Running `/claude` invokes your local LLM to inspect session history, line numbers, and findings, synthesizing an optimized prompt before launching Claude CLI.
-- **Multi-Line Paste Mode (`/multiline`)**: Dedicated `/paste` or `/multiline` mode (finish with `/end`) allows seamless entry of multi-line prompts and code blocks.
+- **Multi-Line Paste Mode (`/multiline`)**: Dedicated `/paste` or `/multiline` mode (finish with `/end`) allows entry of multi-line prompts and code blocks.
 - **Custom Per-User & Project System Prompts**: Customize behavior per project (`./.bandit/system_prompt.txt`), globally (`~/.config/bandit/system_prompt.txt`), or via `config.json`.
 - **Clean Formatting & Line Deletions**: Automatically collapses extra blank lines and cleanly trims indentation when deleting lines.
 - **Domain Skills Auto-Discovery**: Automatically discovers skills across 4 locations (`./.bandit/skills`, `./.claude/skills`, `~/.bandit/skills`, `~/.claude/skills`).
@@ -20,59 +20,63 @@
 
 ---
 
-## 🚀 Quick Start & Installation
+## 🚀 Installation & Usage
 
-### macOS Installation
+### 🍏 macOS Installation (Homebrew & Pre-compiled Binaries)
 
-#### Option 1: Build from Source (Recommended)
-Prerequisites: Go `1.24+` and Rust `cargo`.
+#### Option 1: Homebrew (Recommended for macOS)
+```bash
+brew tap NichuSPN/bandit
+brew install bandit
+```
+
+#### Option 2: Build from Source on macOS
+Prerequisites: Go `1.24+` and Rust (`cargo`).
 
 ```bash
 git clone https://github.com/NichuSPN/bandit.git
 cd bandit
 ./build.sh
 ```
-This builds the single executable `./bandit` and installs it to `~/.cargo/bin/bandit`.
-
-#### Option 2: Homebrew
-```bash
-brew tap NichuSPN/bandit
-brew install bandit
-```
+This compiles `./bandit` and installs it to `~/.cargo/bin/bandit`.
 
 ---
 
-### Windows Installation
+### 🪟 Windows & Other OS (Run from Local Repository)
 
-#### Option 1: PowerShell Quick Installer
-Open PowerShell and run:
+For Windows and other operating systems, clone the repository and run locally from source:
+
+#### Prerequisites
+- **Go**: Version `1.24+` ([golang.org](https://go.dev/dl/))
+- **Rust**: Rust toolchain ([rustup.rs](https://rustup.rs/))
+- **MinGW GCC**: GCC compiler for Windows CGO ([mingw-w64](https://www.mingw-w64.org/))
+
+#### Running Locally on Windows
+Open PowerShell or Command Prompt:
 
 ```powershell
-irm https://raw.githubusercontent.com/NichuSPN/bandit/main/install.ps1 | iex
-```
-
-#### Option 2: Build from Source
-Prerequisites: Go `1.24+`, Rust `cargo`, and GCC/MinGW (for CGO).
-
-```powershell
+# 1. Clone the repository
 git clone https://github.com/NichuSPN/bandit.git
 cd bandit
+
+# 2. Build local executable
 .\build.ps1
+
+# 3. Run Bandit
+.\bandit.exe
 ```
 
-#### Option 3: Scoop Package Manager
+Or run directly with Go:
+
 ```powershell
-scoop bucket add bandit https://github.com/NichuSPN/bandit
-scoop install bandit
+# Compile Rust engine static library
+cd bandit_engine
+cargo build --release
+cd ..
+
+# Run Go CLI
+go run main.go
 ```
-
----
-
-### Direct Binary Download
-
-Pre-compiled binary releases for **macOS (ARM64 & Intel)**, **Windows (x64)**, and **Linux (x64)** are published automatically on every release:
-
-👉 **[Download Latest Binaries from GitHub Releases](https://github.com/NichuSPN/bandit/releases)**
 
 ---
 
@@ -103,32 +107,6 @@ bandit
 
 ---
 
-## 🛠 Project Architecture
-
-```
-bandit/
-├── main.go               # Entry point
-├── build.sh              # 2-Step Hybrid Build script (Go + Rust)
-├── build.ps1             # Windows PowerShell build script
-├── install.ps1           # Windows installer script
-├── bandit_engine/        # Core Rust engine (CGO static library)
-│   ├── Cargo.toml
-│   └── src/lib.rs
-├── pkg/                  # Go core packages
-│   ├── agent/            # Agent state, tool loops, context rollback
-│   ├── claude/           # Claude Code CLI integration
-│   ├── cli/              # Native CLI prompt loop & signal handlers
-│   ├── config/           # Project & global configuration settings
-│   ├── filesystem/       # Clean file operations & formatting
-│   ├── git/              # Workspace git state inspection
-│   └── ollama/           # Local LLM API streaming client
-└── packaging/            # Homebrew & Scoop packaging specs
-    ├── homebrew/bandit.rb
-    └── scoop/bandit.json
-```
-
----
-
 ## 📦 How to Publish a New Release (For Maintainers)
 
 Releases are automated via GitHub Actions (`.github/workflows/release.yml`).
@@ -140,7 +118,7 @@ git tag v1.0.0
 git push origin v1.0.0
 ```
 
-GitHub Actions will automatically build binaries for macOS, Windows, and Linux, compress them into release archives, and create a GitHub Release.
+GitHub Actions will automatically build binaries for macOS (ARM64 & Intel) and Linux and publish them to GitHub Releases.
 
 ---
 
