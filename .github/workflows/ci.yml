@@ -23,9 +23,6 @@ jobs:
         with:
           go-version: '1.24'
 
-      - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
-
       - name: Setup MSYS2 GCC (Windows)
         if: matrix.os == 'windows-latest'
         uses: msys2/setup-msys2@v2
@@ -34,15 +31,41 @@ jobs:
           update: true
           install: mingw-w64-ucrt-x86_64-gcc
 
-      - name: Build Rust Engine
+      - name: Set up Rust (Linux/macOS)
+        if: matrix.os != 'windows-latest'
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up Rust (Windows GNU)
+        if: matrix.os == 'windows-latest'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-gnu
+
+      - name: Build Rust Engine (Linux/macOS)
+        if: matrix.os != 'windows-latest'
         run: |
           cd bandit_engine
           cargo build --release
 
-      - name: Rust Engine Tests
+      - name: Build Rust Engine (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          cd bandit_engine
+          cargo build --release --target x86_64-pc-windows-gnu
+          mkdir -p target/release
+          cp -r target/x86_64-pc-windows-gnu/release/* target/release/ || true
+
+      - name: Rust Engine Tests (Linux/macOS)
+        if: matrix.os != 'windows-latest'
         run: |
           cd bandit_engine
           cargo test
+
+      - name: Rust Engine Tests (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          cd bandit_engine
+          cargo test --target x86_64-pc-windows-gnu
 
       - name: Go Unit Tests
         run: |
