@@ -267,12 +267,15 @@ func (c *OllamaClient) streamChatInternal(ctx context.Context, messages []model.
 		if ctx.Err() != nil {
 			return "", nil, ctx.Err()
 		}
-		return "", nil, fmt.Errorf("connection to Ollama failed: %w", err)
+		return "", nil, fmt.Errorf("connection to Ollama failed (%s): %w\n  👉 Check if Ollama is running ('ollama serve' or open the Ollama app)", baseURL, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
+		if resp.StatusCode == http.StatusNotFound {
+			return "", nil, fmt.Errorf("Ollama model '%s' not found on server.\n  👉 Run 'ollama pull %s' to download the model", c.config.Model, c.config.Model)
+		}
 		return "", nil, fmt.Errorf("Ollama API error HTTP %d: %s", resp.StatusCode, string(bodyBytes))
 	}
 
