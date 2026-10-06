@@ -23,11 +23,12 @@ type OllamaTagsResponse struct {
 }
 
 type OllamaChatRequest struct {
-	Model    string          `json:"model"`
-	Messages []model.Message `json:"messages"`
-	Stream   bool            `json:"stream"`
-	Tools    []interface{}   `json:"tools,omitempty"`
-	Options  map[string]any  `json:"options,omitempty"`
+	Model     string          `json:"model"`
+	Messages  []model.Message `json:"messages"`
+	Stream    bool            `json:"stream"`
+	Tools     []interface{}   `json:"tools,omitempty"`
+	KeepAlive interface{}     `json:"keep_alive,omitempty"`
+	Options   map[string]any  `json:"options,omitempty"`
 }
 
 type OllamaStreamChunk struct {
@@ -240,15 +241,26 @@ func (c *OllamaClient) streamChatInternal(ctx context.Context, messages []model.
 		tools = GetAvailableToolSchemas(allowWriteTools)
 	}
 
+	options := map[string]any{
+		"num_ctx":     16384,
+		"num_predict": -1,
+	}
+	if c.config.NumGPU >= 0 {
+		options["num_gpu"] = c.config.NumGPU
+	}
+
+	keepAliveVal := c.config.KeepAlive
+	if keepAliveVal == "" {
+		keepAliveVal = "-1"
+	}
+
 	reqBody := OllamaChatRequest{
-		Model:    c.config.Model,
-		Messages: messages,
-		Stream:   true,
-		Tools:    tools,
-		Options: map[string]any{
-			"num_ctx":     16384,
-			"num_predict": -1,
-		},
+		Model:     c.config.Model,
+		Messages:  messages,
+		Stream:    true,
+		Tools:     tools,
+		KeepAlive: keepAliveVal,
+		Options:   options,
 	}
 
 	jsonData, err := json.Marshal(reqBody)
@@ -331,4 +343,47 @@ func (c *OllamaClient) streamChatInternal(ctx context.Context, messages []model.
 		progressChan <- model.AgentProgressEvent{Type: model.EventFinished}
 	}
 	return fullContent.String(), collectedToolCalls, nil
+}
+
+func (c *OllamaClient) UnloadModel() error {
+	baseURL := strings.TrimRight(c.config.BaseURL, "/")
+	reqBody := map[string]interface{}{
+		"model":      c.config.Model,
+		"keep_alive": 0,
+	}
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "POST", baseURL+"/api/chat", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	return nil
+}
+
+func IsOOMError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "out of memory") ||
+		strings.Contains(msg, "vram") ||
+		strings.Contains(msg, "cuda") ||
+		strings.Contains(msg, "metal") ||
+		strings.Contains(msg, "failed to allocate") ||
+		strings.Contains(msg, "runner process") ||
+		strings.Contains(msg, "signal: killed") ||
+		strings.Contains(msg, "exit status 137") ||
+		strings.Contains(msg, "unexpected eof")
 }

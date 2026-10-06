@@ -99,6 +99,17 @@ func (a *Agent) UpdateMode(newMode config.InvestigationMode) error {
 	return a.Config.Save()
 }
 
+func (a *Agent) UpdateVRAMConfig(numGPU int, vramLimit string) error {
+	a.Config.Model.NumGPU = numGPU
+	a.Config.Model.VRAMLimit = vramLimit
+	a.Ollama = ollama.NewOllamaClient(a.Config.Model)
+	return a.Config.Save()
+}
+
+func (a *Agent) UnloadModel() error {
+	return a.Ollama.UnloadModel()
+}
+
 func (a *Agent) ResetConversation() {
 	a.Context.Clear()
 	if len(a.Conversation) > 0 {

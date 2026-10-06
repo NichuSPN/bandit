@@ -8,12 +8,14 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 
 	"bandit/pkg/agent"
 	"bandit/pkg/config"
 	"bandit/pkg/model"
+	"bandit/pkg/ollama"
 )
 
 const (
@@ -33,6 +35,11 @@ var (
 
 func RunCLI(cfg config.Config) error {
 	ag := agent.NewAgent(cfg)
+	defer func() {
+		fmt.Printf("%sUnloading model on exit...%s\r\n", colorDim, colorReset)
+		_ = ag.UnloadModel()
+	}()
+
 	localModel, claudeModel := ag.GetModelInfo()
 
 	cwd, err := os.Getwd()
@@ -165,10 +172,27 @@ func processUserPrompt(ag *agent.Agent, prompt string, allowWriteTools bool) {
 	if err != nil {
 		if errors.Is(err, context.Canceled) || ctx.Err() != nil {
 			fmt.Printf("%s✓ Agent execution cancelled. Ready for next command.%s\r\n\r\n", colorYellow, colorReset)
+		} else if ollama.IsOOMError(err) {
+			fmt.Print(FormatOOMErrorNotification(err))
 		} else {
 			fmt.Printf("\r\n%sExecution Error: %v%s\r\n\r\n", colorRed, err, colorReset)
 		}
 	}
+}
+
+func FormatOOMErrorNotification(err error) string {
+	var sb strings.Builder
+	sb.WriteString("\r\n" + colorRed + "============================================================" + colorReset + "\r\n")
+	sb.WriteString(colorRed + "🚨 OUT OF MEMORY (OOM) / VRAM CRASH DETECTED" + colorReset + "\r\n")
+	sb.WriteString(colorRed + "============================================================" + colorReset + "\r\n")
+	sb.WriteString(fmt.Sprintf("Details: %v\r\n\r\n", err))
+	sb.WriteString(colorYellow + "Suggested Actions:" + colorReset + "\r\n")
+	sb.WriteString("  1. Run '" + colorCyan + "/vram suggest" + colorReset + "' to check recommended memory settings for your system.\r\n")
+	sb.WriteString("  2. Set VRAM limit manually (e.g., '" + colorCyan + "/vram 4GB" + colorReset + "' or '" + colorCyan + "/vram 12" + colorReset + "').\r\n")
+	sb.WriteString("  3. Switch to a lighter model (e.g., '" + colorCyan + "/model qwen2.5-coder:7b" + colorReset + "').\r\n")
+	sb.WriteString("  4. Escalate heavy task execution to Claude CLI via '" + colorCyan + "/claude" + colorReset + "'.\r\n")
+	sb.WriteString(colorRed + "============================================================" + colorReset + "\r\n\r\n")
+	return sb.String()
 }
 
 func handleSlashCommand(ag *agent.Agent, cmdStr string, reader *bufio.Reader) {
@@ -187,6 +211,7 @@ func handleSlashCommand(ag *agent.Agent, cmdStr string, reader *bufio.Reader) {
 		fmt.Printf("  %s%-18s%s - Show current local & Claude models\r\n", colorCyan, "/model", colorReset)
 		fmt.Printf("  %s%-18s%s - List installed local Ollama models\r\n", colorCyan, "/model list", colorReset)
 		fmt.Printf("  %s%-18s%s - List available Claude models\r\n", colorCyan, "/model claude list", colorReset)
+		fmt.Printf("  %s%-18s%s - Inspect or configure VRAM & GPU limits (/vram suggest)\r\n", colorCyan, "/vram", colorReset)
 		fmt.Printf("  %s%-18s%s - Enter multi-line paste mode (type '/end' to submit)\r\n", colorCyan, "/paste", colorReset)
 		fmt.Printf("  %s%-18s%s - View/manage project ignored paths (./.bandit/config/preferences.json)\r\n", colorCyan, "/ignore", colorReset)
 		fmt.Printf("  %s%-18s%s - Clear conversation history and context\r\n", colorCyan, "/clear", colorReset)
@@ -195,6 +220,85 @@ func handleSlashCommand(ag *agent.Agent, cmdStr string, reader *bufio.Reader) {
 		fmt.Printf("  %s%-18s%s - Execute code modifications directly using local model\r\n", colorCyan, "/local", colorReset)
 		fmt.Printf("  %s%-18s%s - Escalate task to interactive Claude CLI\r\n", colorCyan, "/claude", colorReset)
 		fmt.Printf("  %s%-18s%s - Exit Bandit session\r\n\r\n", colorCyan, "/exit", colorReset)
+
+	case "/vram":
+		memInfo := config.GetSystemMemoryInfo()
+		if len(parts) == 1 || (len(parts) == 2 && (parts[1] == "info" || parts[1] == "status")) {
+			gpuStr := "Full Offload (-1)"
+			if ag.Config.Model.NumGPU >= 0 {
+				gpuStr = fmt.Sprintf("%d layers", ag.Config.Model.NumGPU)
+			}
+			fmt.Printf("\r\n%sVRAM & Memory Configuration:%s\r\n", colorBold, colorReset)
+			fmt.Printf("  Host System Memory: %s%.1f GB RAM%s (%s/%s)\r\n", colorCyan, memInfo.TotalRAMGB, colorReset, memInfo.OSName, memInfo.Arch)
+			fmt.Printf("  VRAM Usage Limit  : %s%s%s\r\n", colorCyan, ag.Config.Model.VRAMLimit, colorReset)
+			fmt.Printf("  GPU Layer Offload : %s%s%s\r\n", colorCyan, gpuStr, colorReset)
+			fmt.Printf("  Session Keep-Alive: %s%s (locked in VRAM during session)%s\r\n\r\n", colorCyan, ag.Config.Model.KeepAlive, colorReset)
+			fmt.Printf("%sUsage:%s\r\n", colorBold, colorReset)
+			fmt.Printf("  - %s/vram suggest%s          : Get suggested VRAM configuration based on hardware\r\n", colorCyan, colorReset)
+			fmt.Printf("  - %s/vram <4GB|8GB|off>%s    : Limit VRAM usage\r\n", colorCyan, colorReset)
+			fmt.Printf("  - %s/vram <num_layers>%s     : Specify exact GPU layer count (e.g., /vram 12)\r\n\r\n", colorCyan, colorReset)
+		} else if len(parts) >= 2 && parts[1] == "suggest" {
+			rec := config.SuggestVRAMSetting(memInfo, ag.Config.Model.Model)
+			fmt.Printf("\r\n%sSystem Memory & VRAM Suggestion:%s\r\n", colorBold, colorReset)
+			fmt.Printf("  Host RAM          : %s%.1f GB%s\r\n", colorCyan, memInfo.TotalRAMGB, colorReset)
+			fmt.Printf("  Suggested VRAM    : %s%s%s\r\n", colorGreen, rec.SuggestedVRAMLimit, colorReset)
+			gpuRec := "Full Offload (-1)"
+			if rec.SuggestedNumGPU >= 0 {
+				gpuRec = fmt.Sprintf("%d layers", rec.SuggestedNumGPU)
+			}
+			fmt.Printf("  Suggested Layers  : %s%s%s\r\n", colorGreen, gpuRec, colorReset)
+			fmt.Printf("  Suggested Model   : %s%s%s\r\n", colorGreen, rec.SuggestedModel, colorReset)
+			fmt.Printf("  Reason            : %s\r\n\r\n", rec.Reason)
+			fmt.Printf("To apply recommendation:\r\n  Run '%s/vram %s%s'\r\n", colorCyan, rec.SuggestedVRAMLimit, colorReset)
+			if rec.SuggestedModel != ag.Config.Model.Model {
+				fmt.Printf("  Run '%s/model %s%s'\r\n", colorCyan, rec.SuggestedModel, colorReset)
+			}
+			fmt.Println()
+		} else if len(parts) >= 2 {
+			arg := strings.ToLower(parts[1])
+			numGPU := -1
+			vramLimit := "off"
+
+			switch arg {
+			case "off", "-1", "none", "unlimited":
+				numGPU = -1
+				vramLimit = "off"
+			case "4gb", "4g":
+				numGPU = 12
+				vramLimit = "4GB"
+			case "8gb", "8g":
+				numGPU = 24
+				vramLimit = "8GB"
+			case "12gb", "12g":
+				numGPU = 32
+				vramLimit = "12GB"
+			case "16gb", "16g":
+				numGPU = 36
+				vramLimit = "16GB"
+			case "cpu", "0":
+				numGPU = 0
+				vramLimit = "CPU only"
+			default:
+				if n, err := strconv.Atoi(arg); err == nil {
+					numGPU = n
+					if n < 0 {
+						numGPU = -1
+						vramLimit = "off"
+					} else {
+						vramLimit = fmt.Sprintf("%d layers", n)
+					}
+				} else {
+					vramLimit = parts[1]
+					numGPU = 16
+				}
+			}
+
+			if err := ag.UpdateVRAMConfig(numGPU, vramLimit); err == nil {
+				fmt.Printf("%s✓ VRAM limit set to '%s' (num_gpu: %d)%s\r\n\r\n", colorGreen, vramLimit, numGPU, colorReset)
+			} else {
+				fmt.Printf("%s✕ Failed to update VRAM config: %v%s\r\n\r\n", colorRed, err, colorReset)
+			}
+		}
 
 	case "/paste", "/multiline":
 		fmt.Printf("%sEntering Multi-Line Paste Mode. Type or paste your prompt.\r\nType '/end' on its own line when finished:%s\r\n", colorCyan, colorReset)
@@ -358,7 +462,8 @@ func handleSlashCommand(ag *agent.Agent, cmdStr string, reader *bufio.Reader) {
 		fmt.Printf("\r\n%s%s%s\r\n\r\n", colorCyan, verificationReport, colorReset)
 
 	case "/exit":
-		fmt.Printf("%sExiting Bandit. Goodbye!%s\r\n", colorDim, colorReset)
+		fmt.Printf("%sUnloading model and exiting Bandit. Goodbye!%s\r\n", colorDim, colorReset)
+		_ = ag.UnloadModel()
 		os.Exit(0)
 
 	default:

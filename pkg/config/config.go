@@ -61,6 +61,9 @@ type ModelConfig struct {
 	BaseURL      string            `json:"base_url"`
 	Mode         InvestigationMode `json:"mode"`
 	SystemPrompt string            `json:"system_prompt,omitempty"`
+	NumGPU       int               `json:"num_gpu"`
+	VRAMLimit    string            `json:"vram_limit"`
+	KeepAlive    string            `json:"keep_alive"`
 }
 
 func DefaultModelConfig() ModelConfig {
@@ -71,6 +74,9 @@ func DefaultModelConfig() ModelConfig {
 		BaseURL:      "http://localhost:11434",
 		Mode:         ModeResearch,
 		SystemPrompt: "",
+		NumGPU:       -1,
+		VRAMLimit:    "off",
+		KeepAlive:    "-1",
 	}
 }
 
@@ -166,6 +172,13 @@ func LoadConfig() Config {
 	}
 	if cfg.Model.Mode == "" {
 		cfg.Model.Mode = ModeResearch
+	}
+	if cfg.Model.VRAMLimit == "" {
+		cfg.Model.NumGPU = -1
+		cfg.Model.VRAMLimit = "off"
+	}
+	if cfg.Model.KeepAlive == "" {
+		cfg.Model.KeepAlive = "-1"
 	}
 	if len(cfg.Filesystem.Roots) == 0 {
 		cfg.Filesystem.Roots = []string{"~"}
