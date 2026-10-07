@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -249,17 +250,12 @@ func (c *OllamaClient) streamChatInternal(ctx context.Context, messages []model.
 		options["num_gpu"] = c.config.NumGPU
 	}
 
-	keepAliveVal := c.config.KeepAlive
-	if keepAliveVal == "" {
-		keepAliveVal = "-1"
-	}
-
 	reqBody := OllamaChatRequest{
 		Model:     c.config.Model,
 		Messages:  messages,
 		Stream:    true,
 		Tools:     tools,
-		KeepAlive: keepAliveVal,
+		KeepAlive: ParseKeepAlive(c.config.KeepAlive),
 		Options:   options,
 	}
 
@@ -386,4 +382,18 @@ func IsOOMError(err error) bool {
 		strings.Contains(msg, "signal: killed") ||
 		strings.Contains(msg, "exit status 137") ||
 		strings.Contains(msg, "unexpected eof")
+}
+
+func ParseKeepAlive(val string) interface{} {
+	val = strings.TrimSpace(val)
+	if val == "" || val == "-1" {
+		return -1
+	}
+	if val == "0" {
+		return 0
+	}
+	if n, err := strconv.Atoi(val); err == nil {
+		return n
+	}
+	return val
 }

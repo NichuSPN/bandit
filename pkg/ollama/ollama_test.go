@@ -32,3 +32,24 @@ func TestIsOOMError(t *testing.T) {
 		})
 	}
 }
+
+func TestParseKeepAlive(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected interface{}
+	}{
+		{"-1", -1},
+		{"", -1},
+		{"0", 0},
+		{"300", 300},
+		{"5m", "5m"},
+		{"1h", "1h"},
+	}
+
+	for _, tt := range tests {
+		res := ollama.ParseKeepAlive(tt.input)
+		if res != tt.expected {
+			t.Errorf("ParseKeepAlive(%q) = %v (%T); want %v (%T)", tt.input, res, res, tt.expected, tt.expected)
+		}
+	}
+}
