@@ -89,15 +89,17 @@ func ParseModelParamSize(modelName string) float64 {
 	return 7.0
 }
 
-func SuggestVRAMSetting(info HardwareMemoryInfo, currentModel string) VRAMRecommendation {
+func SuggestVRAMSetting(info HardwareMemoryInfo, currentModel string, paramSize float64) VRAMRecommendation {
 	rec := VRAMRecommendation{
 		SuggestedModel: currentModel,
 	}
 
 	ram := info.TotalRAMGB
-	params := ParseModelParamSize(currentModel)
+	if paramSize <= 0 {
+		paramSize = ParseModelParamSize(currentModel)
+	}
 
-	if params >= 70.0 {
+	if paramSize >= 70.0 {
 		if ram < 48.0 {
 			rec.SuggestedNumGPU = 16
 			rec.SuggestedVRAMLimit = "16GB"
@@ -108,7 +110,7 @@ func SuggestVRAMSetting(info HardwareMemoryInfo, currentModel string) VRAMRecomm
 			rec.SuggestedVRAMLimit = "off"
 			rec.Reason = fmt.Sprintf("System memory is %.1f GB. You have sufficient memory for full offloading of 70B model '%s'.", ram, currentModel)
 		}
-	} else if params >= 32.0 {
+	} else if paramSize >= 32.0 {
 		if ram < 24.0 {
 			rec.SuggestedNumGPU = 16
 			rec.SuggestedVRAMLimit = "12GB"
@@ -119,7 +121,7 @@ func SuggestVRAMSetting(info HardwareMemoryInfo, currentModel string) VRAMRecomm
 			rec.SuggestedVRAMLimit = "off"
 			rec.Reason = fmt.Sprintf("System memory is %.1f GB. You have sufficient memory for full GPU offloading of 32B model '%s'.", ram, currentModel)
 		}
-	} else if params >= 14.0 {
+	} else if paramSize >= 14.0 {
 		if ram <= 8.5 {
 			rec.SuggestedNumGPU = 10
 			rec.SuggestedVRAMLimit = "4GB"

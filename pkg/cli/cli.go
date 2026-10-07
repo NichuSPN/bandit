@@ -56,6 +56,11 @@ func RunCLI(cfg config.Config) error {
 	fmt.Printf("%s   Type /help for slash commands or enter your prompt.%s\r\n", colorDim, colorReset)
 	fmt.Printf("%s=======================================================%s\r\n\r\n", colorCyan, colorReset)
 
+	reader := bufio.NewReader(os.Stdin)
+
+	// Automatically run VRAM suggestion check on Bandit startup
+	handleSlashCommand(ag, "/vram suggest", reader)
+
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
@@ -75,8 +80,6 @@ func RunCLI(cfg config.Config) error {
 			}
 		}
 	}()
-
-	reader := bufio.NewReader(os.Stdin)
 
 	for {
 		modeName := ag.Config.Model.Mode.Name()
@@ -238,9 +241,15 @@ func handleSlashCommand(ag *agent.Agent, cmdStr string, reader *bufio.Reader) {
 			fmt.Printf("  - %s/vram <4GB|8GB|off>%s    : Limit VRAM usage\r\n", colorCyan, colorReset)
 			fmt.Printf("  - %s/vram <num_layers>%s     : Specify exact GPU layer count (e.g., /vram 12)\r\n\r\n", colorCyan, colorReset)
 		} else if len(parts) >= 2 && parts[1] == "suggest" {
-			rec := config.SuggestVRAMSetting(memInfo, ag.Config.Model.Model)
+			paramSize := ag.GetModelParameterSize(ag.Config.Model.Model)
+			rec := config.SuggestVRAMSetting(memInfo, ag.Config.Model.Model, paramSize)
 			fmt.Printf("\r\n%sSystem Memory & VRAM Suggestion:%s\r\n", colorBold, colorReset)
 			fmt.Printf("  Host RAM          : %s%.1f GB%s\r\n", colorCyan, memInfo.TotalRAMGB, colorReset)
+			if paramSize > 0 {
+				fmt.Printf("  Active Model      : %s%s (%.1fB parameters)%s\r\n", colorCyan, ag.Config.Model.Model, paramSize, colorReset)
+			} else {
+				fmt.Printf("  Active Model      : %s%s%s\r\n", colorCyan, ag.Config.Model.Model, colorReset)
+			}
 			fmt.Printf("  Suggested VRAM    : %s%s%s\r\n", colorGreen, rec.SuggestedVRAMLimit, colorReset)
 			gpuRec := "Full Offload (-1)"
 			if rec.SuggestedNumGPU >= 0 {

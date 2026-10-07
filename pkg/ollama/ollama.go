@@ -92,6 +92,58 @@ func (c *OllamaClient) ListInstalledModels() []string {
 	return []string{"qwen3:14b", "qwen3-coder", "llama3:8b"}
 }
 
+type OllamaShowResponse struct {
+	Details struct {
+		ParameterSize     string `json:"parameter_size"`
+		QuantizationLevel string `json:"quantization_level"`
+		Family            string `json:"family"`
+	} `json:"details"`
+	ModelInfo map[string]interface{} `json:"model_info"`
+}
+
+func (c *OllamaClient) GetModelParameterSize(modelName string) float64 {
+	baseURL := strings.TrimRight(c.config.BaseURL, "/")
+	reqBody := map[string]string{"name": modelName}
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return config.ParseModelParamSize(modelName)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "POST", baseURL+"/api/show", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return config.ParseModelParamSize(modelName)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return config.ParseModelParamSize(modelName)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK {
+		var showResp OllamaShowResponse
+		if err := json.NewDecoder(resp.Body).Decode(&showResp); err == nil {
+			if countVal, ok := showResp.ModelInfo["general.parameter_count"]; ok {
+				if countFloat, ok := countVal.(float64); ok && countFloat > 0 {
+					return countFloat / 1e9
+				}
+			}
+			if showResp.Details.ParameterSize != "" {
+				ps := strings.TrimSuffix(strings.ToUpper(showResp.Details.ParameterSize), "B")
+				if val, err := strconv.ParseFloat(ps, 64); err == nil && val > 0 {
+					return val
+				}
+			}
+		}
+	}
+
+	return config.ParseModelParamSize(modelName)
+}
+
 func GetReadToolSchemas() []interface{} {
 	return []interface{}{
 		map[string]interface{}{

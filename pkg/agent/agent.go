@@ -110,6 +110,10 @@ func (a *Agent) UnloadModel() error {
 	return a.Ollama.UnloadModel()
 }
 
+func (a *Agent) GetModelParameterSize(modelName string) float64 {
+	return a.Ollama.GetModelParameterSize(modelName)
+}
+
 func (a *Agent) ResetConversation() {
 	a.Context.Clear()
 	if len(a.Conversation) > 0 {
