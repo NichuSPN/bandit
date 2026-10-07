@@ -66,27 +66,86 @@ func GetSystemMemoryInfo() HardwareMemoryInfo {
 	return info
 }
 
+func ParseModelParamSize(modelName string) float64 {
+	m := strings.ToLower(modelName)
+	if strings.Contains(m, "70b") {
+		return 70.0
+	}
+	if strings.Contains(m, "32b") || strings.Contains(m, "33b") {
+		return 32.0
+	}
+	if strings.Contains(m, "14b") || strings.Contains(m, "15b") {
+		return 14.0
+	}
+	if strings.Contains(m, "7b") || strings.Contains(m, "8b") {
+		return 7.0
+	}
+	if strings.Contains(m, "3b") {
+		return 3.0
+	}
+	if strings.Contains(m, "1.5b") || strings.Contains(m, "1b") {
+		return 1.5
+	}
+	return 7.0
+}
+
 func SuggestVRAMSetting(info HardwareMemoryInfo, currentModel string) VRAMRecommendation {
 	rec := VRAMRecommendation{
 		SuggestedModel: currentModel,
 	}
 
 	ram := info.TotalRAMGB
+	params := ParseModelParamSize(currentModel)
 
-	if ram <= 8.5 {
-		rec.SuggestedNumGPU = 12
-		rec.SuggestedVRAMLimit = "4GB"
-		rec.SuggestedModel = "qwen2.5-coder:7b"
-		rec.Reason = fmt.Sprintf("System memory is %.1f GB. For <= 8GB RAM machines, setting VRAM to 4GB (12 GPU layers) and using a 7B model prevents OOM crashes.", ram)
-	} else if ram <= 17.0 {
-		rec.SuggestedNumGPU = 24
-		rec.SuggestedVRAMLimit = "8GB"
-		rec.SuggestedModel = "qwen2.5-coder:7b"
-		rec.Reason = fmt.Sprintf("System memory is %.1f GB. Setting VRAM to 8GB (24 GPU layers) ensures smooth multi-turn performance.", ram)
+	if params >= 70.0 {
+		if ram < 48.0 {
+			rec.SuggestedNumGPU = 16
+			rec.SuggestedVRAMLimit = "16GB"
+			rec.SuggestedModel = "qwen3:14b"
+			rec.Reason = fmt.Sprintf("System memory is %.1f GB. A 70B model requires ~45GB memory. We recommend switching to '%s' or offloading only 16 layers to prevent OOM.", ram, rec.SuggestedModel)
+		} else {
+			rec.SuggestedNumGPU = -1
+			rec.SuggestedVRAMLimit = "off"
+			rec.Reason = fmt.Sprintf("System memory is %.1f GB. You have sufficient memory for full offloading of 70B model '%s'.", ram, currentModel)
+		}
+	} else if params >= 32.0 {
+		if ram < 24.0 {
+			rec.SuggestedNumGPU = 16
+			rec.SuggestedVRAMLimit = "12GB"
+			rec.SuggestedModel = "qwen2.5-coder:7b"
+			rec.Reason = fmt.Sprintf("System memory is %.1f GB. A 32B model requires ~22GB VRAM. We recommend switching to '%s' or limiting VRAM to 12GB (16 GPU layers).", ram, rec.SuggestedModel)
+		} else {
+			rec.SuggestedNumGPU = -1
+			rec.SuggestedVRAMLimit = "off"
+			rec.Reason = fmt.Sprintf("System memory is %.1f GB. You have sufficient memory for full GPU offloading of 32B model '%s'.", ram, currentModel)
+		}
+	} else if params >= 14.0 {
+		if ram <= 8.5 {
+			rec.SuggestedNumGPU = 10
+			rec.SuggestedVRAMLimit = "4GB"
+			rec.SuggestedModel = "qwen2.5-coder:7b"
+			rec.Reason = fmt.Sprintf("System memory is %.1f GB. Running 14B model '%s' will cause OOM crashes. Recommend switching to 'qwen2.5-coder:7b' or limiting VRAM to 4GB (10 GPU layers).", ram, currentModel)
+		} else if ram <= 17.0 {
+			rec.SuggestedNumGPU = 20
+			rec.SuggestedVRAMLimit = "8GB"
+			rec.SuggestedModel = currentModel
+			rec.Reason = fmt.Sprintf("System memory is %.1f GB. For 14B model '%s', limiting VRAM to 8GB (20 GPU layers) balances GPU speed while preserving host RAM for OS and context.", ram, currentModel)
+		} else {
+			rec.SuggestedNumGPU = -1
+			rec.SuggestedVRAMLimit = "off"
+			rec.Reason = fmt.Sprintf("System memory is %.1f GB. You have ample memory to run 14B model '%s' with full GPU offloading.", ram, currentModel)
+		}
 	} else {
-		rec.SuggestedNumGPU = -1
-		rec.SuggestedVRAMLimit = "off"
-		rec.Reason = fmt.Sprintf("System memory is %.1f GB. You have ample memory for full GPU offloading with no restrictions.", ram)
+		if ram <= 8.5 {
+			rec.SuggestedNumGPU = 16
+			rec.SuggestedVRAMLimit = "4GB"
+			rec.SuggestedModel = "qwen2.5-coder:7b"
+			rec.Reason = fmt.Sprintf("System memory is %.1f GB. For 7B model '%s', setting VRAM limit to 4GB (16 GPU layers) prevents system memory paging.", ram, currentModel)
+		} else {
+			rec.SuggestedNumGPU = -1
+			rec.SuggestedVRAMLimit = "off"
+			rec.Reason = fmt.Sprintf("System memory is %.1f GB. You have ample memory for full GPU offloading of '%s' with no restrictions.", ram, currentModel)
+		}
 	}
 
 	return rec

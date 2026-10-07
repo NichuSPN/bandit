@@ -46,19 +46,19 @@ func TestHardwareAndVRAMSuggestion(t *testing.T) {
 		t.Errorf("expected TotalRAMGB > 0, got %f", mem.TotalRAMGB)
 	}
 
-	// Test 8GB RAM recommendation
+	// Test 8GB RAM recommendation for 14B model (should warn & suggest switching to 7B)
 	rec8 := config.SuggestVRAMSetting(config.HardwareMemoryInfo{TotalRAMGB: 8.0}, "qwen3:14b")
-	if rec8.SuggestedNumGPU != 12 || rec8.SuggestedVRAMLimit != "4GB" {
-		t.Errorf("expected 12 layers / 4GB for 8GB RAM, got %d layers / %s", rec8.SuggestedNumGPU, rec8.SuggestedVRAMLimit)
+	if rec8.SuggestedNumGPU != 10 || rec8.SuggestedVRAMLimit != "4GB" || rec8.SuggestedModel != "qwen2.5-coder:7b" {
+		t.Errorf("expected 10 layers / 4GB / qwen2.5-coder:7b for 8GB RAM with 14B model, got %d layers / %s / %s", rec8.SuggestedNumGPU, rec8.SuggestedVRAMLimit, rec8.SuggestedModel)
 	}
 
-	// Test 16GB RAM recommendation
+	// Test 16GB RAM recommendation for 14B model (should suggest 20 layers / 8GB VRAM)
 	rec16 := config.SuggestVRAMSetting(config.HardwareMemoryInfo{TotalRAMGB: 16.0}, "qwen3:14b")
-	if rec16.SuggestedNumGPU != 24 || rec16.SuggestedVRAMLimit != "8GB" {
-		t.Errorf("expected 24 layers / 8GB for 16GB RAM, got %d layers / %s", rec16.SuggestedNumGPU, rec16.SuggestedVRAMLimit)
+	if rec16.SuggestedNumGPU != 20 || rec16.SuggestedVRAMLimit != "8GB" || rec16.SuggestedModel != "qwen3:14b" {
+		t.Errorf("expected 20 layers / 8GB / qwen3:14b for 16GB RAM with 14B model, got %d layers / %s / %s", rec16.SuggestedNumGPU, rec16.SuggestedVRAMLimit, rec16.SuggestedModel)
 	}
 
-	// Test 32GB RAM recommendation
+	// Test 32GB RAM recommendation for 14B model (full offload)
 	rec32 := config.SuggestVRAMSetting(config.HardwareMemoryInfo{TotalRAMGB: 32.0}, "qwen3:14b")
 	if rec32.SuggestedNumGPU != -1 || rec32.SuggestedVRAMLimit != "off" {
 		t.Errorf("expected -1 layers / off for 32GB RAM, got %d layers / %s", rec32.SuggestedNumGPU, rec32.SuggestedVRAMLimit)
