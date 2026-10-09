@@ -47,17 +47,17 @@ func NewAgent(cfg config.Config) *Agent {
 	systemPromptText := fmt.Sprintf(`You are Bandit, an autonomous local terminal AI agent for software developers.
 
 YOUR MISSION:
-When the user asks a question or gives a task, YOU MUST FULLY INVESTIGATE AND ANSWER IT YOURSELF using your tools. Do NOT ask the user for permission or present options like "Would you like me to read .env?". Instead, READ THE FILES YOURSELF using tools.
+When the user asks a question, gives a task, or asks to find a term/symbol, YOU MUST IMMEDIATELY INVESTIGATE IT YOURSELF by calling your tools.
+NEVER output tutorials, step-by-step guides, or text explaining how the user can check or search the codebase.
+ALWAYS execute search or file reading tools yourself in your VERY FIRST turn.
 
 RULES FOR TOOL USE & INVESTIGATION:
-1. ALWAYS start your investigation in the current working directory ("."). Do NOT list home directory "~/" unless explicitly asked.
-2. Use `+"`list_directory(\".\")`"+` to explore project files.
-3. Use `+"`read_file`"+` to inspect actual primary source files and configs (.env, Cargo.toml, package.json, src/, backend/, frontend/src/, etc.).
-4. Use `+"`search_files`"+` to find database connections, imports, or keywords across project source code.
-5. DISCOVERED DOMAIN SKILLS: [%s] - Use `+"`read_skill`"+` to load any relevant skill when working with related technologies or conventions.
-6. HIGH-LEVEL ARCHITECTURE & QUERY ADHERENCE: Directly address the user's specific request. When asked about authentication or project structure, provide a high-level architectural explanation (e.g. "Okta OAuth2 / JWT Bearer Tokens") based on primary source files. Never list or analyze low-level obfuscated or minified JS class names from build bundles.
-7. PLAN & REVIEW MODE (READ-ONLY IN CHAT): Standard chat interaction is STRICTLY READ-ONLY. Use read_file and search_files to investigate and propose exact modification plans with line numbers. Do NOT modify files on disk during standard chat. Instruct the user to run /local or /claude to execute the plan.
-8. APPLYING EDITS: File modification tools are ONLY enabled during /local or /claude execution.`, skillsListStr)
+1. MANDATORY SEARCHING: If the user asks where a symbol, term, function, or string (e.g. "firehose", "auth", "database") is used or located, your VERY FIRST ACTION MUST BE calling `+"`search_files`"+`.
+2. EXPLORATION: Start investigations in the current working directory ("."). Use `+"`list_directory(\".\")`"+` to explore directories and `+"`read_file`"+` to inspect primary source files.
+3. NO PERMISSION NEEDED: Do not ask the user for permission or present generic step-by-step guides. Call the tools directly.
+4. DISCOVERED DOMAIN SKILLS: [%s] - Use `+"`read_skill`"+` to load domain skills.
+5. READ-ONLY IN CHAT: Standard chat interaction is STRICTLY READ-ONLY. Use tool results to locate exact files, lines, and content, then synthesize a concrete answer backed by exact source file line numbers.
+6. APPLYING EDITS: File modification tools are ONLY enabled during /local or /claude execution.`, skillsListStr)
 
 	customPrompt := cfg.GetCustomSystemPrompt(".")
 	if customPrompt != "" {
@@ -145,6 +145,31 @@ func (a *Agent) ProcessUserMessageStreaming(userInput string, allowWriteTools bo
 	return a.ProcessUserMessageStreamingContext(context.Background(), userInput, allowWriteTools, progressChan)
 }
 
+func truncateToolOutput(output string, maxLines int) string {
+	lines := strings.Split(output, "\n")
+	if len(lines) <= maxLines {
+		return output
+	}
+	head := lines[:maxLines/2]
+	tail := lines[len(lines)-maxLines/2:]
+	omitted := len(lines) - maxLines
+	return fmt.Sprintf("%s\n... [%d lines omitted to conserve VRAM/context memory] ...\n%s",
+		strings.Join(head, "\n"), omitted, strings.Join(tail, "\n"))
+}
+
+func (a *Agent) PruneConversationIfNeeded() {
+	// Keep system prompt (index 0) and max recent 10 messages
+	maxMessages := 11
+	if len(a.Conversation) > maxMessages {
+		sysPrompt := a.Conversation[0]
+		recent := a.Conversation[len(a.Conversation)-(maxMessages-1):]
+		pruned := make([]model.Message, 0, maxMessages)
+		pruned = append(pruned, sysPrompt)
+		pruned = append(pruned, recent...)
+		a.Conversation = pruned
+	}
+}
+
 func (a *Agent) ProcessUserMessageStreamingContext(ctx context.Context, userInput string, allowWriteTools bool, progressChan chan<- model.AgentProgressEvent) (string, error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -169,6 +194,8 @@ func (a *Agent) ProcessUserMessageStreamingContext(ctx context.Context, userInpu
 		if ctx.Err() != nil {
 			return "", ctx.Err()
 		}
+
+		a.PruneConversationIfNeeded()
 
 		if progressChan != nil {
 			progressChan <- model.AgentProgressEvent{Type: model.EventThinking}
@@ -207,16 +234,17 @@ func (a *Agent) ProcessUserMessageStreamingContext(ctx context.Context, userInpu
 			}
 
 			toolResult := a.ExecuteTool(tc.Name, tc.Arguments)
+			compactResult := truncateToolOutput(toolResult, 40)
 
 			if progressChan != nil {
 				progressChan <- model.AgentProgressEvent{
 					Type:   model.EventToolResult,
 					Name:   tc.Name,
-					Result: toolResult,
+					Result: compactResult,
 				}
 			}
 
-			a.Conversation = append(a.Conversation, model.NewToolMessage(tc.Name, toolResult))
+			a.Conversation = append(a.Conversation, model.NewToolMessage(tc.Name, compactResult))
 
 			firstLine := toolResult
 			if idx := strings.Index(toolResult, "\n"); idx != -1 {

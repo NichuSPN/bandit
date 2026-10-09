@@ -294,8 +294,13 @@ func (c *OllamaClient) streamChatInternal(ctx context.Context, messages []model.
 		tools = GetAvailableToolSchemas(allowWriteTools)
 	}
 
+	numCtx := 8192
+	if c.config.NumGPU >= 0 && c.config.NumGPU <= 16 {
+		numCtx = 4096
+	}
+
 	options := map[string]any{
-		"num_ctx":     16384,
+		"num_ctx":     numCtx,
 		"num_predict": -1,
 	}
 	if c.config.NumGPU >= 0 {
