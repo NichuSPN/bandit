@@ -13,6 +13,7 @@ import (
 	"bandit/pkg/git"
 	"bandit/pkg/model"
 	"bandit/pkg/ollama"
+	"bandit/pkg/repomap"
 	"bandit/pkg/skills"
 )
 
@@ -34,6 +35,9 @@ func NewAgent(cfg config.Config) *Agent {
 	ollamaClient := ollama.NewOllamaClient(cfg.Model)
 	claudeMgr := claude.NewClaudeManager(cfg.Model.ClaudeModel)
 
+	repoMapGen := repomap.NewRepoMapGenerator(".", 1024)
+	repoMapStr := repoMapGen.GenerateMap()
+
 	discoveredSkills := skillsMgr.ListSkills()
 	var skillNames []string
 	for _, s := range discoveredSkills {
@@ -51,13 +55,15 @@ When the user asks a question, gives a task, or asks to find a term/symbol, YOU 
 NEVER output tutorials, step-by-step guides, or text explaining how the user can check or search the codebase.
 ALWAYS execute search or file reading tools yourself in your VERY FIRST turn.
 
+%s
+
 RULES FOR TOOL USE & INVESTIGATION:
-1. MANDATORY SEARCHING: If the user asks where a symbol, term, function, or string (e.g. "firehose", "auth", "database") is used or located, your VERY FIRST ACTION MUST BE calling `+"`search_files`"+`.
+1. MANDATORY SEARCHING: If the user asks where a symbol, term, function, or string (e.g. "firehose", "auth", "database") is used or located, check the Repository Outline above and call `+"`search_files`"+` or `+"`read_file`"+`.
 2. EXPLORATION: Start investigations in the current working directory ("."). Use `+"`list_directory(\".\")`"+` to explore directories and `+"`read_file`"+` to inspect primary source files.
 3. NO PERMISSION NEEDED: Do not ask the user for permission or present generic step-by-step guides. Call the tools directly.
 4. DISCOVERED DOMAIN SKILLS: [%s] - Use `+"`read_skill`"+` to load domain skills.
 5. READ-ONLY IN CHAT: Standard chat interaction is STRICTLY READ-ONLY. Use tool results to locate exact files, lines, and content, then synthesize a concrete answer backed by exact source file line numbers.
-6. APPLYING EDITS: File modification tools are ONLY enabled during /local or /claude execution.`, skillsListStr)
+6. APPLYING EDITS: File modification tools are ONLY enabled during /local or /claude execution.`, repoMapStr, skillsListStr)
 
 	customPrompt := cfg.GetCustomSystemPrompt(".")
 	if customPrompt != "" {
