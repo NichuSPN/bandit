@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"bandit/pkg/engine"
 )
 
 type RepoMapGenerator struct {
@@ -24,7 +26,14 @@ func NewRepoMapGenerator(rootDir string, maxTokens int) *RepoMapGenerator {
 	}
 }
 
-// ExtractSymbols parses top-level symbols (functions, structs, classes, interfaces, types) from a source file
+func (g *RepoMapGenerator) GenerateMap() string {
+	res := engine.GenerateRepoMap(g.RootDir, g.MaxTokens)
+	if res != "" {
+		return res
+	}
+	return g.generateMapFallback()
+}
+
 func ExtractSymbols(filePath string) ([]string, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -87,7 +96,7 @@ func ExtractSymbols(filePath string) ([]string, error) {
 	return symbols, nil
 }
 
-func (g *RepoMapGenerator) GenerateMap() string {
+func (g *RepoMapGenerator) generateMapFallback() string {
 	var sb strings.Builder
 	maxChars := g.MaxTokens * 4 // Approx 4 chars per token
 

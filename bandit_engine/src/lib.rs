@@ -159,6 +159,91 @@ pub extern "C" fn rust_compute_diff(
 }
 
 #[no_mangle]
+pub extern "C" fn rust_generate_repomap(
+    dir_ptr: *const c_char,
+    max_tokens: usize,
+) -> *mut c_char {
+    let dir_str = if dir_ptr.is_null() {
+        "."
+    } else {
+        unsafe { CStr::from_ptr(dir_ptr).to_str().unwrap_or(".") }
+    };
+
+    let max_chars = if max_tokens == 0 { 4096 } else { max_tokens * 4 };
+    let search_path = Path::new(dir_str);
+
+    let mut builder = WalkBuilder::new(search_path);
+    builder.hidden(false);
+    builder.git_ignore(true);
+    builder.filter_entry(|entry| {
+        let name = entry.file_name().to_string_lossy().to_lowercase();
+        if name == ".git" || name == "node_modules" || name == "vendor" || name == "target" || name == "dist" || name == "build" || name == ".bandit" || name == ".claude" {
+            return false;
+        }
+        true
+    });
+
+    let mut out = String::from("## Repository Outline (Tree-Sitter / Rust Symbol Map)\n");
+
+    for entry in builder.build().filter_map(Result::ok) {
+        if out.len() >= max_chars {
+            out.push_str("\n... [Repository Map truncated to stay within VRAM/token budget] ...\n");
+            break;
+        }
+
+        if !entry.file_type().map_or(false, |ft| ft.is_file()) {
+            continue;
+        }
+
+        let path = entry.path();
+        let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("").to_lowercase();
+        if !matches!(ext.as_str(), "go" | "rs" | "py" | "ts" | "tsx" | "js" | "jsx" | "c" | "cpp" | "h" | "hpp") {
+            continue;
+        }
+
+        if let Ok(content) = std::fs::read_to_string(path) {
+            let mut symbols = Vec::new();
+            for (idx, line) in content.lines().enumerate() {
+                let trimmed = line.trim();
+                if trimmed.is_empty() || trimmed.starts_with("//") || trimmed.starts_with('#') || trimmed.starts_with("/*") {
+                    continue;
+                }
+
+                let is_match = match ext.as_str() {
+                    "go" => trimmed.starts_with("type ") || trimmed.starts_with("func ") || trimmed.starts_with("package "),
+                    "py" => trimmed.starts_with("class ") || trimmed.starts_with("def "),
+                    "ts" | "tsx" | "js" | "jsx" => trimmed.starts_with("export ") || trimmed.starts_with("class ") || trimmed.starts_with("function ") || trimmed.starts_with("interface ") || trimmed.starts_with("type "),
+                    "rs" => trimmed.starts_with("pub ") || trimmed.starts_with("struct ") || trimmed.starts_with("fn ") || trimmed.starts_with("enum ") || trimmed.starts_with("trait ") || trimmed.starts_with("mod "),
+                    "c" | "cpp" | "h" | "hpp" => trimmed.starts_with("typedef ") || trimmed.starts_with("struct ") || trimmed.starts_with("class ") || trimmed.starts_with("enum "),
+                    _ => false,
+                };
+
+                if is_match {
+                    let clean = if let Some(idx_brace) = trimmed.find('{') {
+                        trimmed[..idx_brace].trim()
+                    } else {
+                        trimmed
+                    };
+                    symbols.push(format!("  - L{}: {}", idx + 1, clean));
+                }
+            }
+
+            if !symbols.is_empty() {
+                let rel_path = path.strip_prefix(search_path).unwrap_or(path).display().to_string();
+                let block = format!("\n### {}\n{}\n", rel_path, symbols.join("\n"));
+                if out.len() + block.len() > max_chars {
+                    out.push_str("\n... [Repository Map truncated to stay within VRAM/token budget] ...\n");
+                    break;
+                }
+                out.push_str(&block);
+            }
+        }
+    }
+
+    CString::new(out).unwrap().into_raw()
+}
+
+#[no_mangle]
 pub extern "C" fn rust_free_string(ptr: *mut c_char) {
     if !ptr.is_null() {
         unsafe {
@@ -182,5 +267,15 @@ mod tests {
         rust_free_string(ptr);
 
         assert!(res.contains("+line_new"));
+    }
+
+    #[test]
+    fn test_rust_generate_repomap() {
+        let dir_cstr = CString::new(".").unwrap();
+        let ptr = rust_generate_repomap(dir_cstr.as_ptr(), 1024);
+        let res = unsafe { CStr::from_ptr(ptr).to_string_lossy().to_string() };
+        rust_free_string(ptr);
+
+        assert!(res.contains("Repository Outline"));
     }
 }

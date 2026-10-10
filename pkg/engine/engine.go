@@ -7,6 +7,7 @@ package engine
 
 extern char* rust_fast_search(const char* query, const char* dir, const char* ignores);
 extern char* rust_compute_diff(const char* old_str, const char* new_str, const char* label);
+extern char* rust_generate_repomap(const char* dir, size_t max_tokens);
 extern void rust_free_string(char* ptr);
 */
 import "C"
@@ -40,6 +41,19 @@ func ComputeDiff(oldContent, newContent, fileLabel string) string {
 	defer C.free(unsafe.Pointer(cLabel))
 
 	resPtr := C.rust_compute_diff(cOld, cNew, cLabel)
+	if resPtr == nil {
+		return ""
+	}
+	defer C.rust_free_string(resPtr)
+
+	return C.GoString(resPtr)
+}
+
+func GenerateRepoMap(rootDir string, maxTokens int) string {
+	cDir := C.CString(rootDir)
+	defer C.free(unsafe.Pointer(cDir))
+
+	resPtr := C.rust_generate_repomap(cDir, C.size_t(maxTokens))
 	if resPtr == nil {
 		return ""
 	}
