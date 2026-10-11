@@ -133,9 +133,10 @@ func (cm *ContextManager) PrepareClaudePrompt(overrideTask string, conversation 
 	}
 
 	sb.WriteString("## Instructions for Claude\n")
-	sb.WriteString("1. Inspect the target files listed above and implement the requested changes.\n")
-	sb.WriteString("2. Follow all project conventions, clean formatting, error handling, and test requirements.\n")
-	sb.WriteString("3. Provide clear explanation of your modifications.\n")
+	sb.WriteString("1. MINIMIZE READING: The target files, functions, and lines have already been investigated and verified by Bandit above. Do NOT perform broad codebase re-reading or search exploration. Verify the specific target lines once, highlight only if something is broken or conflicting, and proceed directly to code changes.\n")
+	sb.WriteString("2. Inspect the target files listed above and implement the requested changes.\n")
+	sb.WriteString("3. Follow all project conventions, clean formatting, error handling, and test requirements.\n")
+	sb.WriteString("4. Provide clear explanation of your modifications.\n")
 
 	return sb.String()
 }

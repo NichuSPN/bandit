@@ -11,6 +11,7 @@ import (
 	bcontext "bandit/pkg/context"
 	"bandit/pkg/filesystem"
 	"bandit/pkg/git"
+	"bandit/pkg/interactive"
 	"bandit/pkg/model"
 	"bandit/pkg/ollama"
 	"bandit/pkg/repomap"
@@ -51,19 +52,21 @@ func NewAgent(cfg config.Config) *Agent {
 	systemPromptText := fmt.Sprintf(`You are Bandit, an autonomous local terminal AI agent for software developers.
 
 YOUR MISSION:
-When the user asks a question, gives a task, or asks to find a term/symbol, YOU MUST IMMEDIATELY INVESTIGATE IT YOURSELF by calling your tools.
-NEVER output tutorials, step-by-step guides, or text explaining how the user can check or search the codebase.
-ALWAYS execute search or file reading tools yourself in your VERY FIRST turn.
+When the user asks a question, gives a task, or asks to find a term/symbol, YOU MUST INVESTIGATE IT YOURSELF by calling your tools.
+Do NOT output tutorials, step-by-step guides, or text explaining how the user can check or search the codebase, unless the question is completely trivial and you have already searched the codebase to confirm.
+ALWAYS execute search or file reading tools yourself in your VERY FIRST turn when investigation is needed.
 
 %s
 
 RULES FOR TOOL USE & INVESTIGATION:
 1. MANDATORY SEARCHING: If the user asks where a symbol, term, function, or string (e.g. "firehose", "auth", "database") is used or located, check the Repository Outline above and call `+"`search_files`"+` or `+"`read_file`"+`.
 2. EXPLORATION: Start investigations in the current working directory ("."). Use `+"`list_directory(\".\")`"+` to explore directories and `+"`read_file`"+` to inspect primary source files.
-3. NO PERMISSION NEEDED: Do not ask the user for permission or present generic step-by-step guides. Call the tools directly.
-4. DISCOVERED DOMAIN SKILLS: [%s] - Use `+"`read_skill`"+` to load domain skills.
-5. READ-ONLY IN CHAT: Standard chat interaction is STRICTLY READ-ONLY. Use tool results to locate exact files, lines, and content, then synthesize a concrete answer backed by exact source file line numbers.
-6. APPLYING EDITS: File modification tools are ONLY enabled during /local or /claude execution.`, repoMapStr, skillsListStr)
+3. GIT INSPECTION: Use `+"`git_status`"+` and `+"`git_diff`"+` to inspect recent modifications, uncommitted changes, and repository status.
+4. CLARIFICATION & QUESTIONS: If user requirements, design choices, or options are ambiguous, call `+"`ask_questions`"+` to present interactive multiple-choice options with arrow key selection.
+5. NO PERMISSION NEEDED: Do not ask the user for permission or present generic guides before investigating. Call tools directly.
+6. DISCOVERED DOMAIN SKILLS: The Bandit harness has already scanned ./.claude/skills, ~/.claude/skills, ./.bandit/skills, and ~/.bandit/skills. Discovered skills: [%s]. Use `+"`read_skill`"+` to load domain skills whenever relevant.
+7. READ-ONLY IN CHAT: Standard chat interaction is STRICTLY READ-ONLY. Use tool results to locate exact files, lines, and content, then synthesize a concrete answer backed by exact source file line numbers (e.g. path/to/file.go:L42-L55).
+8. APPLYING EDITS: File modification tools are ONLY enabled during /local or /claude execution.`, repoMapStr, skillsListStr)
 
 	customPrompt := cfg.GetCustomSystemPrompt(".")
 	if customPrompt != "" {
@@ -269,7 +272,12 @@ func (a *Agent) ProcessUserMessageStreamingContext(ctx context.Context, userInpu
 			progressChan <- model.AgentProgressEvent{Type: model.EventThinking}
 		}
 
-		synthPrompt := fmt.Sprintf("Based on all the tool investigation results gathered above, write a complete, clear, and detailed response to the user's request: '%s'", userInput)
+		synthPrompt := fmt.Sprintf(`Based on all the tool investigation results gathered above, write a complete, structured, and detailed response to the user's request: '%s'
+
+Follow this exact structure:
+1. Direct Answer & Summary: Clear, direct answer backed by exact file:line references.
+2. Code Locations & Findings: Exact file paths, lines, and relevant code excerpts discovered during investigation.
+3. Architectural Context & Recommendations: Key insights, trade-offs, and recommended next steps.`, userInput)
 		a.Conversation = append(a.Conversation, model.NewUserMessage(synthPrompt))
 
 		finalSynthesis, err := a.Ollama.StreamChatWithoutTools(a.Conversation, progressChan)
@@ -294,6 +302,16 @@ func (a *Agent) ExecuteTool(name string, args json.RawMessage) string {
 	}
 
 	switch name {
+	case "ask_questions":
+		var p interactive.AskQuestionsParams
+		if err := json.Unmarshal(args, &p); err != nil {
+			return fmt.Sprintf("Invalid arguments for ask_questions: %v", err)
+		}
+		res, err := interactive.AskQuestions(p.Questions)
+		if err != nil {
+			return fmt.Sprintf("Error asking questions: %v", err)
+		}
+		return res
 	case "list_directory":
 		path := getString("path")
 		if path == "" {
@@ -382,9 +400,9 @@ func (a *Agent) PrepareAndRunInteractiveClaude(overrideTask string) error {
 		a.Context.GitDiffSummary = diff
 	}
 
-	synthInstruction := "Synthesize a complete, highly-detailed, and structured task prompt for Claude Code CLI based on all accumulated conversation history, tool results, file lines, and investigation findings above. State the exact target files, lines, and requested code changes."
+	synthInstruction := "Synthesize a complete, highly-detailed, and structured task prompt for Claude Code CLI based on all accumulated conversation history, tool results, file lines, and investigation findings above. State the exact target files, lines, and requested code changes. Explicitly instruct Claude to MINIMIZE READING: verify target lines once without re-reading the entire codebase, highlight if anything is broken or conflicting, and proceed directly with code modifications."
 	if overrideTask != "" {
-		synthInstruction = fmt.Sprintf("Synthesize a complete, highly-detailed, and structured task prompt for Claude Code CLI for the task: '%s'. Include all relevant context, file paths, line references, and investigation findings above.", overrideTask)
+		synthInstruction = fmt.Sprintf("Synthesize a complete, highly-detailed, and structured task prompt for Claude Code CLI for the task: '%s'. Include all relevant context, file paths, line references, and investigation findings above. Explicitly instruct Claude to MINIMIZE READING: verify target lines once without re-reading the entire codebase, highlight if anything is broken or conflicting, and proceed directly with code modifications.", overrideTask)
 	}
 
 	synthConversation := append(a.Conversation, model.NewUserMessage(synthInstruction))

@@ -227,6 +227,40 @@ func GetReadToolSchemas() []interface{} {
 				},
 			},
 		},
+		map[string]interface{}{
+			"type": "function",
+			"function": map[string]interface{}{
+				"name":        "ask_questions",
+				"description": "Ask the user structured multiple-choice questions when you need clarification, architectural decisions, or preferences.",
+				"parameters": map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"questions": map[string]interface{}{
+							"type":        "array",
+							"description": "List of questions to ask the user",
+							"items": map[string]interface{}{
+								"type": "object",
+								"properties": map[string]interface{}{
+									"question": map[string]interface{}{
+										"type":        "string",
+										"description": "The specific question text",
+									},
+									"options": map[string]interface{}{
+										"type": "array",
+										"items": map[string]interface{}{
+											"type": "string",
+										},
+										"description": "Selectable choices for the user (at least 2 options)",
+									},
+								},
+								"required": []string{"question", "options"},
+							},
+						},
+					},
+					"required": []string{"questions"},
+				},
+			},
+		},
 	}
 }
 

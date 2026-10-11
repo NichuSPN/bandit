@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"bandit/pkg/config"
@@ -36,5 +37,20 @@ func TestConversationRollbackOnCancel(t *testing.T) {
 	finalLen := len(ag.Conversation)
 	if finalLen != initialLen {
 		t.Errorf("expected conversation length to roll back to %d, got %d", initialLen, finalLen)
+	}
+}
+
+func TestExecuteToolAskQuestions(t *testing.T) {
+	cfg := config.Config{}
+	ag := NewAgent(cfg)
+
+	payload := `{"questions":[{"question":"Choose an engine","options":["Rust","Go"]}]}`
+	result := ag.ExecuteTool("ask_questions", []byte(payload))
+
+	if !strings.Contains(result, "Choose an engine") {
+		t.Errorf("expected result to include question, got %s", result)
+	}
+	if !strings.Contains(result, "Rust") {
+		t.Errorf("expected result to include default selected option, got %s", result)
 	}
 }
