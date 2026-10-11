@@ -20,3 +20,6 @@ homebrew-bandit/
 .vscode/
 *.swp
 *.swo
+
+# Test fixtures & scratch repos
+test_dummy_repo/
